@@ -129,3 +129,149 @@ let day2input = System.IO.File.ReadAllText "day2.txt"
 printfn "Day2 Test: %A" (build_game1 day2test)
 printfn "Day2 Part 1: %A" (build_game1 day2input)
 printfn "Day2 Part 2: %A" (build_game2 day2input)
+
+
+printfn "Day 3"
+
+let day3test = """
+vJrwpWtwJgWrhcsFMMfFFhFp
+jqHRNqRjqzjGDLGLrsFMfFZSrLrFZsSL
+PmmdzqPrVvPwwTWBwg
+wMqvLMZHhHMvwLHjbvcjnnSBnvTQFn
+ttgJtRGJQctTZtZT
+CrZsJsPPZsGzwwsLwLmpwMDw
+"""
+
+let getScore (x: char) = 
+    "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ".IndexOf(x) + 1
+
+
+let splitStringInHalf(x: string) =
+    let half = (x.Length / 2)
+    (x.Substring(0, half).ToCharArray() |> Array.toList), (x.Substring(half, half).ToCharArray() |> Array.toList)
+
+let intersection (x) =
+
+    let (a, b) = x
+    a |> List.filter (fun x -> b |> List.contains x) 
+
+let getListOfStrings(x : string) = 
+    x.Split($"{Environment.NewLine}", StringSplitOptions.RemoveEmptyEntries)
+    |> Array.toList
+
+let calcPrioritiesPart1 (x: string) = 
+    x |> getListOfStrings
+    |> List.map (fun x -> splitStringInHalf x)
+    |> List.map (fun x -> intersection x)
+    |> List.map (fun x -> List.distinct x)
+    |> List.map (fun x -> 
+        x 
+        |> List.map getScore 
+        |> List.sum)
+    |> List.sum
+
+let getCommon(x: List<List<char>>) =
+    let fx = intersection (x.Item 1, x.Item 0) 
+    intersection (fx, x.Item 2)
+
+let calcPrioritiesPart2 (x: string) = 
+    x 
+    |> getListOfStrings
+    |> List.map (fun x -> x.ToCharArray() |> Array.toList)
+    |> List.chunkBySize 3
+    |> List.map (fun x -> getCommon x)
+    |> List.map(fun x -> List.distinct x)
+    |> List.map (fun x -> 
+        x 
+        |> List.map getScore 
+        |> List.sum)
+    |> List.sum
+
+
+let day3input = System.IO.File.ReadAllText "day3.txt"
+
+printfn "Day3 Test: %A" (calcPrioritiesPart1 day3test) 
+printfn "Day3 Part1: %A" (calcPrioritiesPart1 day3input)
+printfn "Day3 Part2: %A" (calcPrioritiesPart2 day3input)
+
+printfn "Day 4"
+
+let day4test = """
+2-4,6-8
+2-3,4-5
+5-7,7-9
+2-8,3-7
+6-6,4-6
+2-6,4-8
+"""
+
+let getArray (start: string, finish: string) =
+    Array.init (int finish - int start + 1) (fun x -> x + int start)
+
+let ifContains (x , y) = 
+    let intersect = intersection ((x, y))
+    x = intersect || y = intersect
+
+let ifOverlaps (x, y) =
+    let intersect = intersection ((x, y))
+    intersect.Length > 0
+
+let day4 (x: string, check) =
+    x.Split(Environment.NewLine, StringSplitOptions.RemoveEmptyEntries)
+    |> Array.map (fun x -> x.Split(",", StringSplitOptions.RemoveEmptyEntries))
+    |> Array.map (fun x -> x |> Array.map (fun y -> y.Split("-", StringSplitOptions.RemoveEmptyEntries)))
+    |> Array.map (fun x -> x |> Array.map (fun y -> getArray (y[0], y[1])))
+    |> Array.filter (fun x -> check (x[0] |> Array.toList, x[1] |> Array.toList))
+    |> Array.length
+
+
+printfn "day4test %A" (day4  (day4test, ifContains))
+let day4input = System.IO.File.ReadAllText "day4.txt"
+printfn "day4inputPart1 %A" (day4 (day4input,ifContains))
+printfn "day4inputPart2 %A" (day4 (day4input,ifOverlaps))
+
+printfn "Day 5"
+
+let day5teststack = """
+ZN
+MCD
+P
+"""
+
+let day5testmoves = """
+move 1 from 2 to 1
+move 3 from 1 to 3
+move 2 from 2 to 1
+move 1 from 1 to 2
+"""
+
+let build_stacks (x: string) =
+    x.Split(Environment.NewLine, StringSplitOptions.RemoveEmptyEntries)
+    |> Array.map (fun x -> x.ToCharArray() |> Array.toList)
+
+let parse_moves (x: string) = 
+    x.Split(Environment.NewLine, StringSplitOptions.RemoveEmptyEntries)
+    |> Array.map (fun x -> x.Split(" ", StringSplitOptions.RemoveEmptyEntries))
+    |> Array.map (fun x -> (int x[1], int x[3], int x[5]))
+    |> Array.toList
+
+let move (stacks: List<char>[], move: int * int * int, move_multiple: bool) =
+    let (num, move_from, move_to) = move
+    let stackToMove = stacks[move_to - 1]
+    let stackToMoveFrom = stacks[move_from - 1]
+    let itemsToTake = stackToMoveFrom |> List.rev |> List.take num 
+    stacks.[move_to - 1] <- stackToMove @ if move_multiple then (itemsToTake |> List.rev) else itemsToTake
+    stacks.[move_from - 1] <- stackToMoveFrom |> List.rev |> List.skip num |> List.rev
+
+let move_stacks (stacks: List<char>[], moves: List<int * int * int>, move_multiple: bool) =
+    for i in moves do
+        move (stacks, i, move_multiple)
+    stacks
+
+let day5StacksInput = System.IO.File.ReadAllText "day5stacks.txt"
+let day5MovesInput = System.IO.File.ReadAllText "day5moves.txt"
+printfn "%A" (move_stacks (day5StacksInput |> build_stacks, day5MovesInput |> parse_moves, false) |> Array.map (fun x -> x |> List.last |> string) |> String.concat "")
+printfn "%A" (move_stacks (day5StacksInput |> build_stacks, day5MovesInput |> parse_moves, true) |> Array.map (fun x -> x |> List.last |> string)  |> String.concat "")
+
+
+
