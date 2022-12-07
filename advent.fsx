@@ -1,7 +1,6 @@
 open System
 
-let day1test =
-    """
+let day1test = """
 1000
 2000
 3000
@@ -273,5 +272,171 @@ let day5MovesInput = System.IO.File.ReadAllText "day5moves.txt"
 printfn "%A" (move_stacks (day5StacksInput |> build_stacks, day5MovesInput |> parse_moves, false) |> Array.map (fun x -> x |> List.last |> string) |> String.concat "")
 printfn "%A" (move_stacks (day5StacksInput |> build_stacks, day5MovesInput |> parse_moves, true) |> Array.map (fun x -> x |> List.last |> string)  |> String.concat "")
 
+printfn "Day 6"
+
+let findStartOfPacket (x: string, packetLength: int) = 
+    let rec findStartOfPacket (x: string, packetLength: int, index: int) : int =
+        if x[index - packetLength .. index - 1].ToCharArray() 
+                |> Array.distinct 
+                |> Array.length = packetLength then 
+            index
+        else 
+            findStartOfPacket(x, packetLength, index + 1)
+    findStartOfPacket(x, packetLength, packetLength + 1)
 
 
+let day6Test =  [
+    "mjqjpqmgbljsphdztnvjfqwrcgsmlb"; // 7
+    "bvwbjplbgvbhsrlpgdmjqwftvncz"; // 5
+    "nppdvjthqldpwncqszvftbrmjlhg"; //6
+    "nznrnfrfntjfmvfwmzdfjlvtqnbhcprsg"; // 10
+    "zcfzfwzzqfrljwzlrfnpqdbhtmscgvjw" // 11
+]
+
+for i in day6Test do 
+    printfn "Day6Test = %A" (findStartOfPacket (i, 4))
+    printfn "Day6Test = %A" (findStartOfPacket (i, 14))
+
+let day6input : string = System.IO.File.ReadAllText "day6.txt"
+
+printfn "Day6Part1 = %A" (findStartOfPacket (day6input, 4))
+printfn "Day6Part1 = %A" (findStartOfPacket (day6input, 14))
+
+printfn "Day 7"
+
+let day7testinput = """
+$ cd /
+$ ls
+dir a
+14848514 b.txt
+8504156 c.dat
+dir d
+$ cd a
+$ ls
+dir e
+29116 f
+2557 g
+62596 h.lst
+$ cd e
+$ ls
+584 i
+$ cd ..
+$ cd ..
+$ cd d
+$ ls
+4060174 j
+8033020 d.log
+5626152 d.ext
+7214296 k
+"""
+
+type file = {
+    name: string
+    size: int
+}
+
+type dir =
+    {
+        name : string
+        mutable size: int
+        mutable children: List<dir>
+        mutable files: List<file>
+        parent : Option<dir>
+    }
+
+let mutable root: dir = {name = "root"; size = 0; files = List.empty; children = List.empty; parent = None }
+let mutable curDir = root
+
+let buildCmdTree(input: string) =
+    input.Split("$", StringSplitOptions.RemoveEmptyEntries )
+    |> Array.map(fun x -> x.Trim())
+    |> Array.map(fun x -> x.Split(Environment.NewLine, StringSplitOptions.RemoveEmptyEntries))
+    |> Array.filter(fun x -> x.Length <> 0)
+
+let setCurDir(dir: string) =
+    match dir with
+    | "/" -> curDir <- root
+    | ".." -> curDir <- curDir.parent.Value
+    | _ -> curDir <- (curDir.children |> List.find( fun x -> x.name = dir))
+
+let buildFS(cmd: string[]) =
+    for output in cmd[1..] do
+        let sOutput = output.Split(" ", StringSplitOptions.RemoveEmptyEntries)
+        if sOutput[0].StartsWith("dir") then
+            curDir.children <- { name = sOutput[1]; size = 0; files = List.empty; children = List.empty; parent = Some(curDir) } :: curDir.children
+        else
+            curDir.files <- { name = sOutput[1]; size = int sOutput[0]} :: curDir.files
+
+let processCmds(cmds: string[][]) =
+    for cmd in cmds do
+        if cmd[0].StartsWith("cd") then
+            setCurDir(cmd[0].Split(" ", StringSplitOptions.RemoveEmptyEntries)[1])
+        else
+            buildFS(cmd)
+
+let getAllDirectorySizes(root: dir) =
+    let mutable dir_sizes: List<int> = List.Empty
+    let rec getDir(currentDir: dir) =
+        let sumOfChildren =
+            currentDir.children
+            |> List.map getDir
+            |> List.sum
+
+        let sumOfFiles =
+            currentDir.files
+            |> List.map (fun f -> f.size)
+            |> List.sum
+        
+        currentDir.size <- sumOfChildren + sumOfFiles
+        dir_sizes <- currentDir.size :: dir_sizes
+        currentDir.size
+        // Get the total of all sizes
+    root.size <- getDir(root)
+    dir_sizes <- root.size :: dir_sizes
+    dir_sizes
+
+processCmds(buildCmdTree day7testinput)
+let dir_sizes_test = getAllDirectorySizes(root)
+
+printfn "day7testpart1: %A" (dir_sizes_test |> List.filter(fun x -> x <= 100000) |> List.sum)
+
+root = {name = "root"; size = 0; files = List.empty; children = List.empty; parent = None }
+curDir = root
+
+let day7input = System.IO.File.ReadAllText "day7.txt"
+processCmds (buildCmdTree day7input)
+let dir_sizes = getAllDirectorySizes(root)
+
+printfn "day7part1: %A" (dir_sizes |> List.filter(fun x -> x <= 100000) |> List.sum)
+
+
+let dirSizes(input: string) =
+    input.Split(Environment.NewLine, StringSplitOptions.RemoveEmptyEntries)
+    |> Array.fold (fun (path, directories) line -> 
+        match line.Split(' ', StringSplitOptions.RemoveEmptyEntries) with
+        | [| "$"; "cd"; ".." |] -> list.tail path, getAllDirectorySizes
+        | [| "$"; "cd"; name |] -> name :: path, directories
+        | [| num, _ -> |]
+    ) 
+
+
+let parse (paths, dirs: Map<string list, int64>) line =
+    match line.Split(' ', StringSplitOptions.RemoveEmptyEntries) with
+    | [| "$"; "cd"; ".." |] -> list.tail paths, directories
+    | [| "$"; "cd"; name |] -> name :: paths, directories
+    | [| num, _ |] -> 
+    
+    | Regex @"\$ cd \.\." [] -> List.tail paths, dirs
+    | Regex @"\$ cd (.*)" [ dirName ] -> [ dirName ] @ paths, dirs
+    | Regex @"([0-9]+) .*" [ fileSize ] ->
+        let rec traverse (tail: string list) directories =
+            match tail with
+            | [] -> directories
+            | _ :: t ->
+                let newDirs =
+                    Map.change tail (changeFunc (int64 fileSize)) directories
+
+                traverse t newDirs
+
+        paths, traverse paths dirs
+    | _ -> paths, dirs
