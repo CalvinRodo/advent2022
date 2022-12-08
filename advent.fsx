@@ -329,103 +329,22 @@ $ ls
 5626152 d.ext
 7214296 k
 """
+open System.Text.RegularExpressions
 
-type file = {
-    name: string
-    size: int
-}
+let (|Regex|_|) pattern s =
+    let m = Regex.Match(s, pattern)
 
-type dir =
-    {
-        name : string
-        mutable size: int
-        mutable children: List<dir>
-        mutable files: List<file>
-        parent : Option<dir>
-    }
+    match m.Success with
+    | false -> None
+    | true -> Some(List.tail [ for g in m.Groups -> g.Value ])
 
-let mutable root: dir = {name = "root"; size = 0; files = List.empty; children = List.empty; parent = None }
-let mutable curDir = root
-
-let buildCmdTree(input: string) =
-    input.Split("$", StringSplitOptions.RemoveEmptyEntries )
-    |> Array.map(fun x -> x.Trim())
-    |> Array.map(fun x -> x.Split(Environment.NewLine, StringSplitOptions.RemoveEmptyEntries))
-    |> Array.filter(fun x -> x.Length <> 0)
-
-let setCurDir(dir: string) =
-    match dir with
-    | "/" -> curDir <- root
-    | ".." -> curDir <- curDir.parent.Value
-    | _ -> curDir <- (curDir.children |> List.find( fun x -> x.name = dir))
-
-let buildFS(cmd: string[]) =
-    for output in cmd[1..] do
-        let sOutput = output.Split(" ", StringSplitOptions.RemoveEmptyEntries)
-        if sOutput[0].StartsWith("dir") then
-            curDir.children <- { name = sOutput[1]; size = 0; files = List.empty; children = List.empty; parent = Some(curDir) } :: curDir.children
-        else
-            curDir.files <- { name = sOutput[1]; size = int sOutput[0]} :: curDir.files
-
-let processCmds(cmds: string[][]) =
-    for cmd in cmds do
-        if cmd[0].StartsWith("cd") then
-            setCurDir(cmd[0].Split(" ", StringSplitOptions.RemoveEmptyEntries)[1])
-        else
-            buildFS(cmd)
-
-let getAllDirectorySizes(root: dir) =
-    let mutable dir_sizes: List<int> = List.Empty
-    let rec getDir(currentDir: dir) =
-        let sumOfChildren =
-            currentDir.children
-            |> List.map getDir
-            |> List.sum
-
-        let sumOfFiles =
-            currentDir.files
-            |> List.map (fun f -> f.size)
-            |> List.sum
-        
-        currentDir.size <- sumOfChildren + sumOfFiles
-        dir_sizes <- currentDir.size :: dir_sizes
-        currentDir.size
-        // Get the total of all sizes
-    root.size <- getDir(root)
-    dir_sizes <- root.size :: dir_sizes
-    dir_sizes
-
-processCmds(buildCmdTree day7testinput)
-let dir_sizes_test = getAllDirectorySizes(root)
-
-printfn "day7testpart1: %A" (dir_sizes_test |> List.filter(fun x -> x <= 100000) |> List.sum)
-
-root = {name = "root"; size = 0; files = List.empty; children = List.empty; parent = None }
-curDir = root
-
-let day7input = System.IO.File.ReadAllText "day7.txt"
-processCmds (buildCmdTree day7input)
-let dir_sizes = getAllDirectorySizes(root)
-
-printfn "day7part1: %A" (dir_sizes |> List.filter(fun x -> x <= 100000) |> List.sum)
-
-
-let dirSizes(input: string) =
-    input.Split(Environment.NewLine, StringSplitOptions.RemoveEmptyEntries)
-    |> Array.fold (fun (path, directories) line -> 
-        match line.Split(' ', StringSplitOptions.RemoveEmptyEntries) with
-        | [| "$"; "cd"; ".." |] -> list.tail path, getAllDirectorySizes
-        | [| "$"; "cd"; name |] -> name :: path, directories
-        | [| num, _ -> |]
-    ) 
-
+let changeFunc num value =
+    match value with
+    | None -> Some(int64 num)
+    | Some x -> Some(num + int64 x)
 
 let parse (paths, dirs: Map<string list, int64>) line =
-    match line.Split(' ', StringSplitOptions.RemoveEmptyEntries) with
-    | [| "$"; "cd"; ".." |] -> list.tail paths, directories
-    | [| "$"; "cd"; name |] -> name :: paths, directories
-    | [| num, _ |] -> 
-    
+    match line with
     | Regex @"\$ cd \.\." [] -> List.tail paths, dirs
     | Regex @"\$ cd (.*)" [ dirName ] -> [ dirName ] @ paths, dirs
     | Regex @"([0-9]+) .*" [ fileSize ] ->
@@ -440,3 +359,102 @@ let parse (paths, dirs: Map<string list, int64>) line =
 
         paths, traverse paths dirs
     | _ -> paths, dirs
+
+let getDirectorySizes fn =
+    System.IO.File.ReadLines("day7.txt")
+    |> Seq.fold parse ([], Map.empty<string list, int64>)
+    |> snd
+    |> Map.values
+    
+let part1 fn () =
+    getDirectorySizes fn
+    |> Seq.filter ((>) 100000)
+    |> Seq.sum
+
+let part2 fn () =
+    let dirSizes = getDirectorySizes fn
+    let total = 70_000_000L
+    let needed = 30_000_000L
+    let toBeFreed = needed - (total - (Seq.max dirSizes))
+    dirSizes |> Seq.filter ((<) toBeFreed) |> Seq.min
+
+printfn "%A" ((part1 ())())
+printfn "%A" ((part2 ())())
+
+
+printfn "Day 8"
+
+let day8test = """30373
+25512
+65332
+33549
+35390"""
+
+let getAllVisibleTrees (line: int []) =
+    line
+    |> Array.mapFold (fun max height -> max < height, Math.Max(max, height)) -1
+    |> fst
+
+let calcScenic line =
+    let indexed = Array.indexed line
+
+    indexed
+    |> Array.map (fun (i, height) ->
+        indexed
+        |> Seq.take i
+        |> Seq.rev
+        |> Seq.takeWhile (fun (_, h) -> h < height)
+        |> Seq.length
+        |> fun x -> if x = i then x else x + 1)
+
+let map2d2 (arr1: 'T[][]) (arr2: 'T[][]) f  =
+    let at: 'T[][] = Array.create arr1.Length (Array.zeroCreate arr1.Length)
+    for i in 0 .. arr1.Length - 1 do
+        at[i] <- Array.map2 f arr1.[i] arr2.[i]
+    at
+
+let orTwo2dArrays arr1 arr2 =
+    map2d2 arr1 arr2 (||)
+
+let multTwo2dArrays arr1  arr2=
+    map2d2 arr1 arr2 (*)
+
+let toCharArray(input : string) =
+    input.Split(Environment.NewLine, StringSplitOptions.RemoveEmptyEntries)
+    |> Array.map(fun x -> x.ToCharArray())
+    |> Array.map(fun x -> x |> Array.map(fun y -> y |> string |> int))
+
+let getAllScenic(arr: int[][]) =
+    let l = arr |> Array.map(fun x -> x |> calcScenic)
+    let r = arr |> Array.map(fun x -> x |> Array.rev |> calcScenic |> Array.rev) 
+    let t = arr |> Array.transpose |> Array.map(fun x -> x |> calcScenic) |> Array.transpose
+    let b = arr |> Array.transpose |> Array.map(fun x -> x |> Array.rev |> calcScenic |> Array.rev) |> Array.transpose
+
+    let lr = multTwo2dArrays l r
+    let tb = multTwo2dArrays t b
+    let all = multTwo2dArrays lr tb 
+
+    all |> Array.map(fun x -> x |> Array.max) |> Array.max
+
+let getAllVisible(arr: int[][]) =
+    let l = arr |> Array.map(fun x -> x |> getAllVisibleTrees)
+    let r = arr |> Array.map(fun x -> x |> Array.rev |> getAllVisibleTrees |> Array.rev) 
+    let t = arr |> Array.transpose |> Array.map(fun x -> x |> getAllVisibleTrees) |> Array.transpose
+    let b = arr |> Array.transpose |> Array.map(fun x -> x |> Array.rev |> getAllVisibleTrees |> Array.rev) |> Array.transpose
+
+    let lr = orTwo2dArrays l r
+    let tb = orTwo2dArrays t b
+    let all = orTwo2dArrays lr tb
+
+    all |> Array.map(fun x -> x |> Array.filter((=) true) |> Array.length) |> Array.sum
+    
+let countVisible(input: string) =
+    toCharArray(input)
+    |> getAllVisible
+
+let getScenic(input: string ) =
+    toCharArray(input)
+    |> getAllScenic
+
+printfn "Part1: %A" (countVisible (System.IO.File.ReadAllText "day8.txt"))
+printfn "Part2: %A" (getScenic (System.IO.File.ReadAllText "day8.txt"))

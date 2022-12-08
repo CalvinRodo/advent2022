@@ -15,7 +15,8 @@
 			"extensions": [
 				"Ionide.Ionide-fsharp",
 				"ms-dotnettools.csharp",
-				"GitHub.vscode-pull-request-github"
+				"GitHub.vscode-pull-request-github",
+				"GitHub.copilot"
 			]
 		}
 	}
