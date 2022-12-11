@@ -458,3 +458,127 @@ let getScenic(input: string ) =
 
 printfn "Part1: %A" (countVisible (System.IO.File.ReadAllText "day8.txt"))
 printfn "Part2: %A" (getScenic (System.IO.File.ReadAllText "day8.txt"))
+
+
+printfn "Day 9"
+
+
+
+let calcDelta (move : string) =
+    match move.Split(" ", StringSplitOptions.RemoveEmptyEntries) with
+    | [|"R"; d |] -> (int d, 0)
+    | [|"L"; d |] -> (-(int d), 0)
+    | [|"U"; d |] -> (0, int d)
+    | [|"D"; d |] -> (0, -(int d))
+    | _ -> failwith "Invalid input"
+
+let addTuple (a: int * int) (b: int * int) =
+    match (a, b) with
+    | ((x1, y1), (x2, y2)) -> (x1 + x2, y1 + y2)
+
+let getNextMove (h: int * int) (t: int * int) (d : (int * int)) =
+    match (addTuple h d, t) with
+    | ((dx, dy), (tx, ty)) when dx = tx && dy = ty -> (0,0)
+
+    | ((dx, dy), (tx, ty)) when dx > tx && dy = ty -> addTuple t (1,0) // L
+    | ((dx, dy), (tx, ty)) when dx < tx && dy = ty -> addTuple t (-1,0) // R
+    | ((dx, dy), (tx, ty)) when dx = tx && dy < ty -> addTuple t (0,-1)  // D
+    | ((dx, dy), (tx, ty)) when dx = tx && dy > ty -> addTuple t (0,1) // U
+
+    | ((dx, dy), (tx, ty)) when dx > tx && dy > ty -> addTuple t (1,1) //RU
+    | ((dx, dy), (tx, ty)) when dx > tx && dy < ty -> addTuple t (1,-1) //RD
+
+    | ((dx, dy), (tx, ty)) when dx < tx && dy < ty -> addTuple t (-1,-1) //LD
+    | ((dx, dy), (tx, ty)) when dx < tx && dy > ty -> addTuple t (-1,1) //LU
+
+    | _ -> failwith "Invalid input"
+
+let calcPath (h: int * int) (t: int * int) (d : (int * int)) =
+    let h' = addTuple h d
+    let rec traverse (h: int * int) (t: int * int) (path) =
+        let move = getNextMove h t d
+        if move = h || move = (0,0) then
+            path
+        else
+            traverse h' move (path @ [move])
+    traverse h' t []
+
+
+let third (_, _, c) = c
+let getDeltas (input: string) =
+    input.Split(Environment.NewLine, StringSplitOptions.RemoveEmptyEntries)
+    |> Array.map (fun x -> x |> calcDelta)
+
+let acc (h: int * int, t: int * int, path: list<(int * int)>) d = 
+    //printfn "h: %A, t: %A, path: %A" h t path
+    let h' = addTuple h d
+    let path' = path @ calcPath h t d
+    let t' = path' |> List.rev |> List.head
+    //printfn "h': %A, t': %A, path': %A" h' t' path'
+     
+    (h', t', path')
+
+let part1Day9 (input: string) = 
+    input 
+    |> getDeltas
+    // convert the deltas to a list of (h, t, path) tuples
+    |> Array.fold (acc) ((0,0), (0,0), [(0,0)])
+    |> third
+
+let day9test = """
+R 4
+U 4
+L 3
+D 1
+R 4
+D 1
+L 5
+R 2
+"""
+
+printfn "Part1TestData: %A" (part1Day9 day9test |> List.distinct |> List.length)
+printfn "Part 1: %A" (part1Day9 (System.IO.File.ReadAllText "day9.txt") |> List.distinct |> List.length)
+
+let getInput (input: string)=
+    input.Split(Environment.NewLine, StringSplitOptions.RemoveEmptyEntries)
+    |> Array.map (fun x -> (x.Split(" ", StringSplitOptions.RemoveEmptyEntries)))
+    |> Array.map (fun x -> (x.[0], int x.[1]))
+
+let follow (hx, hy) (tx, ty) =
+    match hx - tx, hy - ty with
+    | x, y when abs x <= 1 && abs y <= 1 -> tx, ty
+    | x, y -> tx + sign x, ty + sign y
+
+let moveRope (dx, dy) rope =
+    match rope with
+    | [] -> []
+    | (hx, hy) :: t -> List.scan follow (hx + dx, hy + dy) t
+
+let delta direction =
+    match direction with
+    | "U" -> 0, 1
+    | "D" -> 0, -1
+    | "R" -> 1, 0
+    | "L" -> -1, 0
+    | _ -> failwith "Invalid direction"
+
+let visitedByTail moves rope =
+    moves
+    |> Array.fold
+        (fun (visited, rope) (dir, amount) ->
+            Seq.init amount id
+            |> Seq.fold
+                (fun (set, rope) _ ->
+                    let newRope = moveRope (delta dir) rope
+                    Set.add (List.last newRope) set, newRope)
+                (visited, rope))
+        (Set.singleton (0, 0), rope)
+    |> fst
+    |> Set.count
+
+let makeRope ropeSize = List.init ropeSize (fun _ -> 0, 0)
+
+let cheat1 = makeRope 2 |> visitedByTail (getInput (System.IO.File.ReadAllText "day9.txt"))
+let cheat2 = makeRope 10 |> visitedByTail (getInput (System.IO.File.ReadAllText "day9.txt"))
+printfn "cheat 1: %A" cheat1
+printfn "cheat 2: %A" cheat2
